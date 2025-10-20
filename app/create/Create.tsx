@@ -58,7 +58,6 @@ export function Create() {
     const [location, setLocation] = useState('')
     const [loading, setLoading] = useState(false);
     const [errors, setErrors] = useState<{ [key: string]: string}>({})
-    const [user, setUser] = useState<any>(null)
 
 
     const fetchData = async () => {
@@ -85,15 +84,11 @@ export function Create() {
                 throw new Error('Supabase client not initialized. Check your environment variables.');
             }
 
-            if (!user) {
-                throw new Error('User not authenticated. Please wait for authentication to complete.');
-            }
 
             // Debug environment variables
             console.log('Environment check:');
             console.log('SUPABASE_URL:', process.env.NEXT_PUBLIC_SUPABASE_URL ? 'Set' : 'Not set');
             console.log('SUPABASE_KEY:', process.env.NEXT_PUBLIC_SUPABASE_KEY ? 'Set' : 'Not set');
-            console.log('Current user:', user);
 
             const validatedData = checkForm.parse({
                 title,
