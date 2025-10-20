@@ -12,7 +12,7 @@ export function Navbar() {
         <NavigationMenuList>
           <NavigationMenuItem>
             <NavigationMenuLink>
-              <Link href="/">Zoink</Link>
+              <Link href="/">Free Food</Link>
             </NavigationMenuLink>
           </NavigationMenuItem>
 

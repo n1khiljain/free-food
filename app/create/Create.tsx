@@ -32,12 +32,11 @@ import { useEffect, useState } from "react";
 import { z } from 'zod';
 
 import { supabase }  from '@/app/page';
-import { title } from "process";
 
 const checkForm = z.object({
     title: z.string().min(1, "Title is required").max(300, 'Title must be less than 300 characters'),
-    body: z.string().max(5000, 'Description must be less than 5000 characters').optional(),
-    location: z.string().optional(),
+    body: z.string().max(5000, 'Description must be less than 5000 characters').optional().or(z.literal('')),
+    location: z.string().optional().or(z.literal('')),
 })
 
 type checkFormData = z.infer<typeof checkForm>
@@ -49,11 +48,6 @@ interface Post {
     title: string
     body: string | null
     location: string | null
-    category: string | null
-    upvotes: number | null
-    downvotes: number | null
-    image_url: string | null
-    status: string | null
   }
 
 export function Create() {
@@ -64,6 +58,8 @@ export function Create() {
     const [location, setLocation] = useState('')
     const [loading, setLoading] = useState(false);
     const [errors, setErrors] = useState<{ [key: string]: string}>({})
+    const [user, setUser] = useState<any>(null)
+
 
     const fetchData = async () => {
         const { data, error } = await supabase.from('posts').select().order('created_at', {ascending: false})
@@ -75,39 +71,88 @@ export function Create() {
             title: item.title,
             body: item.body,
             location: item.location,
-            category: item.category,
-            upvotes: item.upvotes,
-            downvotes: item.downvotes,
-            image_url: item.image_url,
-            status: item.status,
         }))
         setPosts(formattedData)
       }
 
     const submitData = async (e: React.FormEvent) => {
         e.preventDefault();
+        setLoading(true);
+        setErrors({});
 
-        const { data, error } = await supabase.from('posts')
-            .insert({ 
+        try {
+            if (!supabase) {
+                throw new Error('Supabase client not initialized. Check your environment variables.');
+            }
+
+            if (!user) {
+                throw new Error('User not authenticated. Please wait for authentication to complete.');
+            }
+
+            // Debug environment variables
+            console.log('Environment check:');
+            console.log('SUPABASE_URL:', process.env.NEXT_PUBLIC_SUPABASE_URL ? 'Set' : 'Not set');
+            console.log('SUPABASE_KEY:', process.env.NEXT_PUBLIC_SUPABASE_KEY ? 'Set' : 'Not set');
+            console.log('Current user:', user);
+
+            const validatedData = checkForm.parse({
                 title,
-                body,
-                location,
-                category,
-                upvotes: 0,
-                downvotes: 0,
-                status: 'active'}).select()
+                body: body || '',
+                location: location || ''
+            });
 
-        if (error) {
-            console.error('Error inserting data:', error)
-        } else {
+            console.log('Attempting to insert data:', validatedData);
+
+            const { data, error } = await supabase.from('posts').insert(validatedData).select()
+
+            if (error) {
+                console.error('Supabase error:', error);
+                throw error;
+            }
+
             console.log('Data inserted successfully:', data)
-            
+
+            alert('Post created successfully')
+
             setTitle('')
             setBody('')
             setLocation('')
-            setCategory('Free Food')
 
-            fetchData()
+            router.push('/')
+        } catch (error) {
+            console.error('Full error details:', error);
+            if (error instanceof z.ZodError) {
+                const fieldErrors: { [key: string]: string } = {}
+                error.issues.forEach((err) => {
+                    if (err.path[0]) {
+                        fieldErrors[err.path[0] as string] = err.message
+                    }
+                })
+                setErrors(fieldErrors)
+                console.log('Validation errors:', fieldErrors)
+                alert(`Validation errors: ${Object.values(fieldErrors).join(', ')}`)
+            } else {
+                console.log('Error inserting data:', error)
+                console.log('Error type:', typeof error)
+                console.log('Error constructor:', error?.constructor?.name)
+                
+                // Handle different types of errors
+                if (error && typeof error === 'object') {
+                    if ('message' in error) {
+                        alert(`Error creating post: ${error.message}`)
+                    } else if ('error' in error) {
+                        alert(`Error creating post: ${error.error}`)
+                    } else if ('details' in error) {
+                        alert(`Error creating post: ${error.details}`)
+                    } else {
+                        alert(`Error creating post: ${JSON.stringify(error)}`)
+                    }
+                } else {
+                    alert(`Error creating post: ${String(error)}`)
+                }
+            }
+        } finally {
+            setLoading(false);
         }
     }
 
@@ -122,51 +167,64 @@ export function Create() {
                 <h1 className="text-xl font-semibold mb-6 pb-4 border-b border-gray-200">
                     Create a post
                 </h1>
-                
-                <div className="space-y-4">
-                    <div className="flex gap-4">
-                    <InputGroup>
-                        <InputGroupInput 
-                            className="w-full h-14 text-base" 
-                            placeholder="Title"
+                <form onSubmit={submitData}>
+                    <div className="space-y-4">
+                        <div className="flex gap-4">
+                        <InputGroup>
+                            <InputGroupInput 
+                                className="w-full h-14 text-base" 
+                                placeholder="Title"
+                                value={title}
+                                onChange={(e) => setTitle(e.target.value)}
+                                required
+                            />
+                            </InputGroup>
+
+                            <Select value={location} onValueChange={setLocation}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select a Location (Optional)"/>
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectGroup>
+                                        <SelectLabel>Location</SelectLabel>
+                                        <SelectItem value="sproul">Sproul</SelectItem>
+                                        <SelectItem value="memorial glade">Memorial Glade</SelectItem>
+                                        <SelectItem value="rsf">RSF</SelectItem>
+                                        <SelectItem value="other">Other</SelectItem>
+                                    </SelectGroup>
+                                    
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <InputGroup>
+                        <InputGroupTextarea 
+                            className="w-full min-h-[200px] text-base resize-none" 
+                            placeholder="Text (optional)"
+                            value={body}
+                            onChange={(e) => setBody(e.target.value)}
                         />
-                        <InputGroupAddon>
-                            {}
-                        </InputGroupAddon>
                         </InputGroup>
 
-                        <Select>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Select a Location (Optional)"/>
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectGroup>
-                                    <SelectLabel>Location</SelectLabel>
-                                    <SelectItem value="sproul">Sproul</SelectItem>
-                                    <SelectItem value="memorial glade">Memorial Glade</SelectItem>
-                                    <SelectItem value="rsf">RSF</SelectItem>
-                                    <SelectItem value="other">Other</SelectItem>
-                                </SelectGroup>
-                                
-                            </SelectContent>
-                        </Select>
-                    </div>
+                        <div className="flex justify-end gap-3 pt-4">
+                            <Button 
+                            variant="outline"
+                            type="button"
+                            onClick={() => router.push('/')}
+                            >
+                                Cancel
+                            </Button>
 
-                    <InputGroup>
-                    <InputGroupTextarea 
-                        className="w-full min-h-[200px] text-base resize-none" 
-                        placeholder="Text (optional)"
-                    />
-                    <InputGroupAddon>
-                        {}
-                    </InputGroupAddon>
-                    </InputGroup>
-
-                    <div className="flex justify-end gap-3 pt-4">
-                        <Button variant="outline">Cancel</Button>
-                        <Button>Post</Button>
+                            <Button
+                                type="submit"
+                                disabled={loading || !title}
+                            >
+                                {loading ? 'Posting...' : 'Post'}
+                            </Button>
+                        </div>
                     </div>
-                </div>
+                </form>
+                
                 </div>
             </div>
             </div>
